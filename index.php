@@ -496,9 +496,7 @@ $wild = <<<EOT
 EOT;
 
 $mild = <<<EOT
-weed|5|5
-beer|2|24
-shrooms|20|1
+lel
 EOT;
 
 $whitespace = ParseHelper::whitespace();
@@ -579,17 +577,17 @@ $pattern = ParseHelper::either_tagger(array(
 	array('choice' => 'meta_separated_repetition', 'parser' => $meta_separated_repetition),
 ));
 
-$weed_format = '[{name:RE\w+GEX,price:RE\d+GEX,qty:RE\d+GEX},"\n"]';
-// $weed_format = '[{name:RE\w+GEX},","]';
-// $weed_format = '[{yup:"eh"},","]';
+$weeds_format = '[{name:RE\w+GEX,price:RE\d+GEX,qty:RE\d+GEX},"\n"]';
+// $weeds_format = '[{name:RE\w+GEX},","]';
+// $weeds_format = '[{yup:"eh"},","]';
 
 
 echo "</p><p>meta as fuck</p><p>";
 
-// echo htmlspecialchars(json_encode($pattern($weed_format)));
-// echo htmlspecialchars(json_encode($meta_sequence_members($weed_format)));
+// echo htmlspecialchars(json_encode($pattern($weeds_format)));
+// echo htmlspecialchars(json_encode($meta_sequence_members($weeds_format)));
 echo '<pre>';
-print_r($meta_sequence_members($weed_format));
+print_r($meta_sequence_members($weeds_format));
 echo '</pre>';
 
 
