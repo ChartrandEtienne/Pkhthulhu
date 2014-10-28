@@ -68,15 +68,19 @@ class ParseHelper {
 			$results = array();
 			foreach ($sequence as $seq) {
 				$parser = $seq['parser'];
+				$optional = isset($seq['optional']) && $seq['optional'];
 				$add = isset($seq['add']) && $seq['add'];
 				$tag = isset($seq['tag']) ? $seq['tag'] : false;
 				$res = $seq['parser']($input);
+				$failed_maybe = isset($res['maybe']) && $res['maybe'];
 				if ($res['success']) {
 					if ($add) {
-						if ($tag) {
-							$results[$tag] = $res['result'];
-						} else {
-							$results[] = $res['result'];
+						if (!($failed_maybe && $optional)) {
+							if ($tag) {
+								$results[$tag] = $res['result'];
+							} else {
+								$results[] = $res['result'];
+							}
 						}
 					}
 					$input = $res['next'];
@@ -177,7 +181,7 @@ class ParseHelper {
 				$input = $res['next'];
 				return array('result' => $result, 'next' => $input, 'success' => true);
 			} else {
-				return array('result' => true, 'next' => $input, 'success' => true);
+				return array('result' => true, 'next' => $input, 'success' => true, 'maybe' => true);
 			}
 		};
 	}
@@ -487,19 +491,87 @@ EOT;
 $whitespace = ParseHelper::whitespace();
 
 // so let's see
+// identifier: [\w_]+
+// variable: @[\w_]+
 // literal: "literal"
 // either: (patter1|pattern2|pattern3)
-// sequence: {pattern1,pattern2,pattern3}
-// tagged_sequence: {tag1:pattern1,tag2:pattern2,?optional:pattern,anon_pattern,tag3:pattern3}
+// tagged_sequence: {tag1:pattern1,tag2:pattern2,?optional:pattern,anon_pattern,tag3:pattern3,?anon_optional}
+// tagged_seq_mem: (anon_pattern|?optional_anon|tag:pattern|?name:optional_pattern)
+// tagged_sequence: {[@tagged_seq_mem,","]}
 // maybe: pattern? // really it's possible that this only makes sense in the tagged_sequence context
 // repetition: [pattern]
 // separated_repetition: [pattern,separator]
 // regex: REpatternGEX
 // I actually need to fucking name my patterns
 // $var=pattern;
+// ...
+// weeds
 
+$meta_identifier = ParseHelper::regex('/^[\w_]+/');
+$meta_variable_name = ParseHelper::regex('/^@[\w_]+/');
+$meta_literal = ParseHelper::regex('/^".*?"/');
+$meta_regex = ParseHelper::regex('/^RE.*?GEX/');
+
+$pattern = null; // recursion
+
+$meta_either = ParseHelper::sequence_tagger(array(
+	array('parser' => ParseHelper::literal('(')),
+	array('add' => true, 'tag' => 'choices', 'parser' => ParseHelper::separated_repetition($pattern, ParseHelper::literal("|"))),
+	array('parser' => ParseHelper::literal(')')),
+));
+
+$meta_sequence_members = ParseHelper::either(array(
+	&$pattern,	// anonymous pattern alone
+	ParseHelper::sequence(array(
+		ParseHelper::literal("?"),
+		&$pattern,
+	)),					// option anon pattern alone
+	ParseHelper::sequence(array(
+		$meta_identifier,
+		ParseHelper::literal(":"),
+		&$pattern,
+	)),					// tag:pattern pair
+	ParseHelper::sequence(array(
+		ParseHelper::literal("?"),
+		$meta_identifier,
+		ParseHelper::literal(":"),
+		&$pattern,
+	)),					// ?tag:pattern optional pair
+));
+
+$meta_tagged_sequence = ParseHelper::sequence_tagger(array(
+	array('parser' => ParseHelper::literal("{")),
+	array('add' => true, 'tag' => 'elements', 'parser' => ParseHelper::separated_repetition($meta_sequence_members, ParseHelper::literal(","))),
+	array('parser' => ParseHelper::literal("}")),
+));
+
+$meta_separated_repetition = ParseHelper::sequence_tagger(array(
+	array('parser' => ParseHelper::literal("[")),
+	array('add' => true, 'tag' => 'elements', 'parser' => &$pattern),
+	array('parser' => ParseHelper::literal(",")),
+	array('add' => true, 'tag' => 'separator', 'parser' => &$pattern),
+	array('parser' => ParseHelper::literal("]")),
+));
+
+$pattern = ParseHelper::either(array(
+	$meta_variable_name,
+	$meta_literal,
+	$meta_regex,
+	$meta_either,
+	$meta_tagged_sequence,
+	$meta_separated_repetition,
+));
 
 $weed_format = '[{name:RE\w+GEX,price:RE\d+GEX,qty:RE\d+GEX},"\n"]';
+// $weed_format = '[{name:RE\w+GEX},","]';
+// $weed_format = '[{yup:"eh"},","]';
+
+
+echo "</p><p>meta as fuck</p><p>";
+
+// echo htmlspecialchars(json_encode($pattern($weed_format)));
+echo htmlspecialchars(json_encode($meta_sequence_members($weed_format)));
+
 
 $weed_format = <<<EOT
 @name=RE\w+GEX;@price=RE\d+GEX;@qty=RE\d+GEX;@new="\n";
@@ -509,8 +581,11 @@ EOT;
 $xml_format = <<<EOT
 @space=RE\s+GEX;
 @name=RE\w+GEX;
-@attribute={
-@open_tag={"<",space?,tag:@name,
+@string_literal=({"\"",value:RE\w+GEX,"\""}|{"'",value:RE\w+GEX,"'"});
+@attribute={name:@name,?space,"=",?space,value:@string_literal};
+@attributes=[@attributes,@space];
+@open_tag={"<",space?,tag:@name,?attributes:@attributes,?space,">"};
+@close_tag={"</",?space,@name,?space,">"};
 EOT;
 
 $weed_parser = ParseHelper::separated_repetition(ParseHelper::sequence_tagger(array(
@@ -533,20 +608,21 @@ $tag = ParseHelper::regex("/\w+/");
 
 // $attribute = ParseHelper::sequence(array($whitespace, $tag, ParseHelper::literal('='), $string_literal));
 $attribute = ParseHelper::sequence_tagger(array(
-	array('parser' => $whitespace),
-	array('add' => true, 'tag' => 'name', 'parser' => $tag),
+	// array('parser' => $whitespace),
+	array('add' => true, 'optional' => true, 'tag' => 'name', 'parser' => $tag),
 	array('parser' => ParseHelper::literal('=')),
 	array('add' => true, 'tag' => 'value', 'parser' => $string_literal),
 ));
 
-$attributes = ParseHelper::repetition($attribute);
+$attributes = ParseHelper::Maybe(ParseHelper::separated_repetition($attribute, $whitespace));
 
 // $open_tag = ParseHelper::sequence(array(ParseHelper::literal("<"), $maybe_whitespace, $tag, $attributes, ParseHelper::literal(">")));
 $open_tag = ParseHelper::sequence_tagger(array(
 	array('parser' => ParseHelper::literal("<")),
 	array('parser' => $maybe_whitespace),
 	array('add' => true, 'tag' => 'tag', 'parser' => $tag),
-	array('add' => true, 'tag' => 'attributes', 'parser' => $attributes),
+	array('parser' => $maybe_whitespace),
+	array('add' => true, 'optional' => true, 'tag' => 'attributes', 'parser' => $attributes),
 	array('parser' => ParseHelper::literal(">")),
 ));
 
