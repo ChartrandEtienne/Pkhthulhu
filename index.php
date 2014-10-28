@@ -60,6 +60,34 @@ class ParseHelper {
 		};
 	}
 
+	public static function sequence_tagger($sequence) {
+		return function($input) use ($sequence) {
+
+			// echo "<br>sequence<br>";
+			// var_dump($input);
+			$results = array();
+			foreach ($sequence as $seq) {
+				$parser = $seq['parser'];
+				$add = isset($seq['add']) && $seq['add'];
+				$tag = isset($seq['tag']) ? $seq['tag'] : false;
+				$res = $seq['parser']($input);
+				if ($res['success']) {
+					if ($add) {
+						if ($tag) {
+							$results[$tag] = $res['result'];
+						} else {
+							$results[] = $res['result'];
+						}
+					}
+					$input = $res['next'];
+				} else {
+					return $res;
+				}
+			}
+			return array('result' => $results, 'next' => $input, 'success' => true);
+		};
+	}
+
 	public static function sequence($sequence) {
 		return function($input) use ($sequence) {
 
@@ -75,6 +103,40 @@ class ParseHelper {
 					return $res;
 				}
 			}
+			return array('result' => $results, 'next' => $input, 'success' => true);
+		};
+	}
+
+	public static function separated_repetition($pattern, $separator) {
+		return function($input) use ($pattern, $separator) {
+			$results = array();
+			while (true) {
+				// echo "<br>REPETITION<br>";
+				// echo $input;
+				// var_dump($results);
+				$res = $pattern($input);
+				if ($res['success']) {
+					$results[] = $res['result'];
+					$input = $res['next'];
+				} else {
+					if (0 == count($results)) {
+						return array('success' => false);
+					}
+					break;
+				}
+
+				$res = $separator($input);
+				if ($res['success']) {
+					// $results[] = $res['result'];
+					$input = $res['next'];
+				} else {
+					if (0 == count($results)) {
+						return array('success' => false);
+					}
+					break;
+				}
+			}
+
 			return array('result' => $results, 'next' => $input, 'success' => true);
 		};
 	}
@@ -389,7 +451,7 @@ EOT;
 
 $wild = <<< EOT
 <div id="hero-content">
-        <span id="controls">
+        <span>
             <a href="/tour" id="tell-me-more" class="button">Take the 2-minute tour</a>
             <span id="close"><a title="click to dismiss">tsss</a></span>
         </span>
@@ -399,86 +461,104 @@ $wild = <<< EOT
     </div>
 EOT;
 
-$wilder = <<< EOT
-<script>
-        $('#tell-me-more').click(function () {
-            var clickSource = $("body").attr("class") + '-mini';
-            if ($("body").hasClass("questions-page")) {
-                clickSource = 'questionpagemini';
-            } else if ($("body").hasClass("question-page")) {
-                clickSource = 'questionpagemini';
-            } else if ($("body").hasClass("home-page")) {
-                clickSource = 'homepagemini';
-            }
-
-            StackExchange.using("gps", function () {
-                StackExchange.gps.track("aboutpage.click", { aboutclick_location: clickSource } , true);
-            });
-        });
-        $('#herobox-mini #close').click(function () {
-            StackExchange.using("gps", function () {
-                StackExchange.gps.track("hero.action", { hero_action_type: "close" }, true);
-            });
-            $.cookie("hero", "none", { path: "/", expires: 365 });
-            var $\hero = $("#herobox-mini");
-            \$hero.slideUp('fast', function () { $\hero.remove(); });
-            return false;
-        });
-    </script>
-EOT;
-
-$wildest = <<< EOT
-<div id="herobox-mini">
-    <div id="hero-content">
-        <span id="controls">
-            <a href="/tour" id="tell-me-more" class="button">Take the 2-minute tour</a>
-            <span id="close"><a title="click to dismiss">boooo</a></span>
-        </span>
-        <div id="blurb">
-            sTACK oVErflow is a question and answer site for professional and enthusiast programmers. It's 100% free, no registration required.
-        </div>
-    </div>
-    <script>
-        $('#tell-me-more').click(function () {
-            var clickSource = $("body").attr("class") + '-mini';
-            if ($("body").hasClass("questions-page")) {
-                clickSource = 'questionpagemini';
-            } else if ($("body").hasClass("question-page")) {
-                clickSource = 'questionpagemini';
-            } else if ($("body").hasClass("home-page")) {
-                clickSource = 'homepagemini';
-            }
-
-            StackExchange.using("gps", function () {
-                StackExchange.gps.track("aboutpage.click", { aboutclick_location: clickSource } , true);
-            });
-        });
-        $('#herobox-mini #close').click(function () {
-            StackExchange.using("gps", function () {
-                StackExchange.gps.track("hero.action", { hero_action_type: "close" }, true);
-            });
-            $.cookie("hero", "none", { path: "/", expires: 365 });
-            var $\hero = $("#herobox-mini");
-            \$hero.slideUp('fast', function () { $\hero.remove(); });
-            return false;
-        });
-    </script>
+$wild = <<<EOT
+<div>
+	<div id="contained-1">
+	</div>
+	<div id="contained-2">
+	</div>
+	<div id="contained-3">
+	</div>
+	<div id="contained-4">
+	</div>
+	<div id="contained-5">
+	</div>
+	<div id="contained-6">
+	</div>
 </div>
 EOT;
 
+$mild = <<<EOT
+weed|5|5
+beer|2|24
+shrooms|20|1
+EOT;
+
 $whitespace = ParseHelper::whitespace();
+
+// so let's see
+// literal: "literal"
+// either: (patter1|pattern2|pattern3)
+// sequence: {pattern1,pattern2,pattern3}
+// tagged_sequence: {tag1:pattern1,tag2:pattern2,?optional:pattern,anon_pattern,tag3:pattern3}
+// maybe: pattern? // really it's possible that this only makes sense in the tagged_sequence context
+// repetition: [pattern]
+// separated_repetition: [pattern,separator]
+// regex: REpatternGEX
+// I actually need to fucking name my patterns
+// $var=pattern;
+
+
+$weed_format = '[{name:RE\w+GEX,price:RE\d+GEX,qty:RE\d+GEX},"\n"]';
+
+$weed_format = <<<EOT
+@name=RE\w+GEX;@price=RE\d+GEX;@qty=RE\d+GEX;@new="\n";
+[{name:@name,price:@price,qty:@qty},@new}]
+EOT;
+
+$xml_format = <<<EOT
+@space=RE\s+GEX;
+@name=RE\w+GEX;
+@attribute={
+@open_tag={"<",space?,tag:@name,
+EOT;
+
+$weed_parser = ParseHelper::separated_repetition(ParseHelper::sequence_tagger(array(
+	array('add' => true, 'tag' => 'name', 'parser' => ParseHelper::regex('/\w+/')),
+	array('parser' => ParseHelper::literal('|')),
+	array('add' => true, 'tag' => 'price', 'parser' => ParseHelper::regex('/\d+/')),
+	array('parser' => ParseHelper::literal('|')),
+	array('add' => true, 'tag' => 'qty', 'parser' => ParseHelper::regex('/\d+/')),
+)), ParseHelper::literal("\n"));
+
+echo "</p><p>deal</p><p>";
+echo htmlspecialchars(json_encode($weed_parser($mild)));
+
+
 
 $maybe_whitespace = ParseHelper::maybe($whitespace);
 
 
 $tag = ParseHelper::regex("/\w+/");
 
-$attribute = ParseHelper::sequence(array($whitespace, $tag, ParseHelper::literal('='), $string_literal));
+// $attribute = ParseHelper::sequence(array($whitespace, $tag, ParseHelper::literal('='), $string_literal));
+$attribute = ParseHelper::sequence_tagger(array(
+	array('parser' => $whitespace),
+	array('add' => true, 'tag' => 'name', 'parser' => $tag),
+	array('parser' => ParseHelper::literal('=')),
+	array('add' => true, 'tag' => 'value', 'parser' => $string_literal),
+));
+
 $attributes = ParseHelper::repetition($attribute);
 
-$open_tag = ParseHelper::sequence(array(ParseHelper::literal("<"), $maybe_whitespace, $tag, $attributes, ParseHelper::literal(">")));
+// $open_tag = ParseHelper::sequence(array(ParseHelper::literal("<"), $maybe_whitespace, $tag, $attributes, ParseHelper::literal(">")));
+$open_tag = ParseHelper::sequence_tagger(array(
+	array('parser' => ParseHelper::literal("<")),
+	array('parser' => $maybe_whitespace),
+	array('add' => true, 'tag' => 'tag', 'parser' => $tag),
+	array('add' => true, 'tag' => 'attributes', 'parser' => $attributes),
+	array('parser' => ParseHelper::literal(">")),
+));
 
-$close_tag = ParseHelper::sequence(array(ParseHelper::literal("</"), $maybe_whitespace, $tag, $maybe_whitespace, ParseHelper::literal(">")));
+// $close_tag = ParseHelper::sequence(array(ParseHelper::literal("</"), $maybe_whitespace, $tag, $maybe_whitespace, ParseHelper::literal(">")));
+
+$close_tag = ParseHelper::sequence_tagger(array(
+	array('parser' => ParseHelper::literal("</")),
+	array('parser'=> $maybe_whitespace),
+	array('add' => true, 'tag' => 'tag', 'parser' => $tag),
+	array('parser' => $maybe_whitespace),
+	array('parser' => ParseHelper::literal(">"))
+));
 
 $content = ParseHelper::literal("yeah");
 $element = null;
@@ -490,7 +570,13 @@ $element_content = ParseHelper::either(array(
 	// ParseHelper::zero(),
 ));
 
-$element = ParseHelper::repetition(ParseHelper::sequence(array($maybe_whitespace, $open_tag, $element_content, $close_tag, $maybe_whitespace)));
+$element = ParseHelper::repetition(ParseHelper::sequence_tagger(array(
+	array('parser' => $maybe_whitespace),
+	array('add' => true, 'tag' => 'open_tag', 'parser' => $open_tag),
+	array('add' => true, 'tag' => 'content', 'parser' => $element_content),
+	array('add' => true, 'tag' => 'closing_tag', 'parser' => $close_tag),
+	array('parser' => $maybe_whitespace),
+)));
 
 
 echo "</p><p>html better</p><p>";
