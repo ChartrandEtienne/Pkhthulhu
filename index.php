@@ -45,6 +45,19 @@ class ParseHelper {
 		};
 	}
 
+	public static function either_tagger($choices) {
+		return function($input) use ($choices) {
+			foreach ($choices as $choice) {
+				$res = $choice['parser']($input);
+				if ($res['success']) {
+					$res['result']['choice'] = $choice['choice'];
+					return $res;
+				}
+			}
+			return array('success' => false);
+		};
+	}
+
 	public static function either($choices) {
 		return function($input) use ($choices) {
 
@@ -520,23 +533,27 @@ $meta_either = ParseHelper::sequence_tagger(array(
 	array('parser' => ParseHelper::literal(')')),
 ));
 
-$meta_sequence_members = ParseHelper::either(array(
-	&$pattern,	// anonymous pattern alone
-	ParseHelper::sequence(array(
+$meta_sequence_members = ParseHelper::either_tagger(array(
+	// anonymous pattern alone
+	array('choice' => 'anon', 'parser' => &$pattern),
+	// option anon pattern alone
+	array('choice' => 'option_anon', 'parser' => ParseHelper::sequence(array(
 		ParseHelper::literal("?"),
 		&$pattern,
-	)),					// option anon pattern alone
-	ParseHelper::sequence(array(
+	))),
+	// tag:pattern pair
+	array('choice' => 'pair', 'parser' => ParseHelper::sequence(array(
 		$meta_identifier,
 		ParseHelper::literal(":"),
 		&$pattern,
-	)),					// tag:pattern pair
-	ParseHelper::sequence(array(
+	))),
+	// ?tag:pattern optional pair
+	array('choice' => 'option_pair', 'parser' => ParseHelper::sequence(array(
 		ParseHelper::literal("?"),
 		$meta_identifier,
 		ParseHelper::literal(":"),
 		&$pattern,
-	)),					// ?tag:pattern optional pair
+	))),
 ));
 
 $meta_tagged_sequence = ParseHelper::sequence_tagger(array(
@@ -553,13 +570,13 @@ $meta_separated_repetition = ParseHelper::sequence_tagger(array(
 	array('parser' => ParseHelper::literal("]")),
 ));
 
-$pattern = ParseHelper::either(array(
-	$meta_variable_name,
-	$meta_literal,
-	$meta_regex,
-	$meta_either,
-	$meta_tagged_sequence,
-	$meta_separated_repetition,
+$pattern = ParseHelper::either_tagger(array(
+	array('choice' => 'meta_variable_name', 'parser' => $meta_variable_name),
+	array('choice' => 'meta_literal', 'parser' => $meta_literal),
+	array('choice' => 'meta_regex', 'parser' => $meta_regex),
+	array('choice' => 'meta_either', 'parser' => $meta_either),
+	array('choice' => 'meta_tagged_sequence', 'parser' => $meta_tagged_sequence),
+	array('choice' => 'meta_separated_repetition', 'parser' => $meta_separated_repetition),
 ));
 
 $weed_format = '[{name:RE\w+GEX,price:RE\d+GEX,qty:RE\d+GEX},"\n"]';
@@ -570,7 +587,10 @@ $weed_format = '[{name:RE\w+GEX,price:RE\d+GEX,qty:RE\d+GEX},"\n"]';
 echo "</p><p>meta as fuck</p><p>";
 
 // echo htmlspecialchars(json_encode($pattern($weed_format)));
-echo htmlspecialchars(json_encode($meta_sequence_members($weed_format)));
+// echo htmlspecialchars(json_encode($meta_sequence_members($weed_format)));
+echo '<pre>';
+print_r($meta_sequence_members($weed_format));
+echo '</pre>';
 
 
 $weed_format = <<<EOT
