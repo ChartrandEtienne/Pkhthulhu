@@ -1,9 +1,6 @@
 <?php
 
 class ParseHelper {
-	// returns array(Date, string) or error
-
-
 	public static function result($result) {
 		return function($input) use ($result) {
 			return array('result' => $result, 'next' => $input, 'success' => true);
@@ -126,9 +123,6 @@ class ParseHelper {
 		return function($input) use ($pattern, $separator) {
 			$results = array();
 			while (true) {
-				// echo "<br>REPETITION<br>";
-				// echo $input;
-				// var_dump($results);
 				$res = $pattern($input);
 				if ($res['success']) {
 					$results[] = $res['result'];

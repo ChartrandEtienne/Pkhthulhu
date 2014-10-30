@@ -6,6 +6,7 @@ error_reporting(-1);
 
 include_once 'ParseHelper.php';
 include_once 'meta.php';
+include_once 'compiler.php';
 
 echo '<pre>';
 
@@ -18,14 +19,41 @@ $weeds_format = '[{RE\w+GEX,price:RE\d+GEX,qty:RE\d+GEX},"\n"]';
 // $weeds_format = '[{name:RE\w+GEX},","]';
 // $weeds_format = '[{yup:"eh"},","]';
 
-$ok = array('ident', 'RE\w+GEX', '@variable', '"literal"',
-	'["sep_list",","]',
-	'{ident:"literal"}',
+$ok = array(
+	// 'ident' => 'ident',
+	'RE\w+GEX' => 'blabla',
+	'RE,GEX' => ',',
+	'@variable' => '@variable',
+	'"literal"' => '"literal"',
+	'["sep_list",RE,GEX]' => '"sep_list","sep_list"',
+	'{ident:"literal"}' => '{ident:"literal"}',
 );
 
-foreach($ok as $o) {
-	echo "\nforeach\n";
-	print_r($pattern($o));
+foreach($ok as $o => $test) {
+	echo "\npattern: " . $o  . "\n";
+	$result = $pattern($o)['result'];
+	print_r($result);
+	$compiled = $compile_dispatcher($result);
+	// echo "\ndispatcher: \n";
+
+	// print_r($compiled);
+	if ("error" != $compiled) {
+		$parsed = $compiled($test);
+		echo "\ncompiled:\n";
+		print_r($parsed);
+	}
+
+	/*
+	if (isset($result['choice'])) {
+		if (isset($compile_dispatcher[$result['choice']])) {
+			$compiler = $compile_dispatcher[$result['choice']];
+			$compiled = $compiler($result);
+			$parsed = $compiled($test);
+			echo "\ncompiled:\n";
+			print_r($parsed);
+		}
+	}
+	*/
 }
 
 
