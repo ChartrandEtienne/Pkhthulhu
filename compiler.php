@@ -28,6 +28,50 @@ $compile_function = array(
 		$to_return = ParseHelper::separated_repetition($elements, $separator);
 		return $to_return;
 	},
+
+	'meta_tagged_sequence' => function($to_compile) use (&$compile_dispatcher) {
+		$elements = array();
+		foreach ($to_compile['elements'] as $to) {
+			switch($to['choice']) {
+				case "pair":
+					$parser = $compile_dispatcher($to['pattern']);
+					$identifier = $to['identifier']['pattern'];
+					$identifier_parser = ParseHelper::literal($identifier);
+					$elements[] = array('parser' => $identifier_parser);
+					$elements[] = array('add' => true, 'tag' => $identifier, 'parser' => $parser);
+				break;
+
+				case "option_pair":
+					// ugly and annoying
+					$parser = $compile_dispatcher($to['pattern']);
+					$identifier = $to['identifier']['pattern'];
+					$identifier_parser = ParseHelper::literal($identifier);
+					$elements[] = array('add' => true, 'tag' => $identifier, 'parser' => ParseHelper::maybe(ParseHelper::sequence_tagger(array(
+						array('parser' => $identifier_parser),
+						array('add' => true, 'tag' => $identifier, 'parser' => $parser),
+					))));
+				break;
+				case "anon":
+					$parser = $compile_dispatcher($to['pattern']);
+					// add or no add?
+					$elements[] = array('add' => true, 'parser' => $parser);
+				break;
+
+				case "option_anon":
+					$parser = ParseHelper::maybe($compile_dispatcher($to['pattern']));
+					// add or no add?
+					$elements[] = array('add' => true, 'parser' => $parser);
+				break;
+				default:
+					echo "\nFUCKUP\n";
+				break;
+			}
+		}
+		$to_return = ParseHelper::sequence_tagger($elements);
+		return $to_return;
+	},
+	// either
+
 );
 
 $compile_dispatcher = function($to_compile) use ($compile_function) {

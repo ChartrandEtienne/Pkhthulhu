@@ -8,87 +8,57 @@ include_once 'ParseHelper.php';
 include_once 'meta.php';
 include_once 'compiler.php';
 
-echo '<pre>';
+$mock_data = '[{"id":1,"first_name":"Jeremy","last_name":"Foster","email":"jfoster0@plala.or.jp","country":"Colombia","ip_address":"61.173.239.167"},
+{"id":2,"first_name":"Carl","last_name":"Graham","email":"cgraham1@paginegialle.it","country":"Indonesia","ip_address":"44.235.27.226"},
+{"id":3,"first_name":"Dorothy","last_name":"Daniels","email":"ddaniels2@ifeng.com","country":"Russia","ip_address":"225.136.106.138"}]
+';
+
+$string_literal = ParseHelper::regex('/^".*?"/');
+
+$object = null;
+$array = null;
+
+$value = ParseHelper::either_tagger(array(
+	array('choice' => 'string', 'parser' => ParseHelper::regex('/^".*?"/')),
+	array('choice' => 'number', 'parser' => ParseHelper::regex('/^\d+/')),
+	array('choice' => 'true', 'parser' => ParseHelper::literal('true')),
+	array('choice' => 'false', 'parser' => ParseHelper::literal('false')),
+	array('choice' => 'null', 'parser' => ParseHelper::literal('null')),
+	array('choice' => 'object', 'parser' => &$object),
+	array('choice' => 'array', 'parser' => &$array),
+));
+
+$array = ParseHelper::sequence_tagger(array(
+	array('parser' => ParseHelper::literal("[")),
+	array('add' => true, 'tag' => 'elements', 'parser' => ParseHelper::separated_repetition($value, ParseHelper::literal(","))),
+	array('parser' => ParseHelper::literal("]")),
+));
+
+$object_element = ParseHelper::sequence_tagger(array(
+	array('add' => true, 'tag' => 'key', 'parser' => ParseHelper::regex('/^".*?"/')),
+	array('parser' => ParseHelper::literal(":")),
+	array('add' => true, 'tag' => 'value', 'parser' => &$value),
+));
+
+$object = ParseHelper::sequence_tagger(array(
+	array('parser' => ParseHelper::literal("{")),
+	array('add' => true, 'tag' => 'elements', 'parser' => ParseHelper::separated_repetition($object_element, ParseHelper::literal(","))),
+	array('parser' => ParseHelper::literal("}")),
+));
 
 
+$mock_data = '["it",12,{"works":["gr",8],"see":"that","shit":{"m":8}},1337]';
+// $mock_data = '[12]';
+// $mock_data = '12';
 
+// $test = ParseHelper::regex('/^".*?"/');
+// $test = ParseHelper::regex('/^\d+?/');
 
+echo "<pre>";
+echo "\ndatas: \n";
+echo $mock_data . "\n";
+print_r(json_encode($value($mock_data)));
 
-// $weeds_format = '[{name:RE\w+GEX,price:RE\d+GEX,qty:RE\d+GEX},"\n"]';
-$weeds_format = '[{RE\w+GEX,price:RE\d+GEX,qty:RE\d+GEX},"\n"]';
-// $weeds_format = '[{name:RE\w+GEX},","]';
-// $weeds_format = '[{yup:"eh"},","]';
-
-$ok = array(
-	// 'ident' => 'ident',
-	'RE\w+GEX' => 'blabla',
-	'RE,GEX' => ',',
-	'@variable' => '@variable',
-	'"literal"' => '"literal"',
-	'["sep_list",RE,GEX]' => '"sep_list","sep_list"',
-	'{ident:"literal"}' => '{ident:"literal"}',
-);
-
-foreach($ok as $o => $test) {
-	echo "\npattern: " . $o  . "\n";
-	$result = $pattern($o)['result'];
-	print_r($result);
-	$compiled = $compile_dispatcher($result);
-	// echo "\ndispatcher: \n";
-
-	// print_r($compiled);
-	if ("error" != $compiled) {
-		$parsed = $compiled($test);
-		echo "\ncompiled:\n";
-		print_r($parsed);
-	}
-
-	/*
-	if (isset($result['choice'])) {
-		if (isset($compile_dispatcher[$result['choice']])) {
-			$compiler = $compile_dispatcher[$result['choice']];
-			$compiled = $compiler($result);
-			$parsed = $compiled($test);
-			echo "\ncompiled:\n";
-			print_r($parsed);
-		}
-	}
-	*/
-}
-
-
-// echo htmlspecialchars(json_encode($pattern($weeds_format)));
-// echo htmlspecialchars(json_encode($meta_sequence_members($weeds_format)));
-// print_r($meta_sequence_members($weeds_format));
-print_r($pattern($weeds_format));
-
-
-$weed_format = <<<EOT
-@name=RE\w+GEX;@price=RE\d+GEX;@qty=RE\d+GEX;@new="\n";
-[{name:@name,price:@price,qty:@qty},@new}]
-EOT;
-
-$xml_format = <<<EOT
-@space=RE\s+GEX;
-@name=RE\w+GEX;
-@string_literal=({"\"",value:RE\w+GEX,"\""}|{"'",value:RE\w+GEX,"'"});
-@attribute={name:@name,?space,"=",?space,value:@string_literal};
-@attributes=[@attributes,@space];
-@open_tag={"<",space?,tag:@name,?attributes:@attributes,?space,">"};
-@close_tag={"</",?space,@name,?space,">"};
-EOT;
-
-$weed_parser = ParseHelper::separated_repetition(ParseHelper::sequence_tagger(array(
-	array('add' => true, 'tag' => 'name', 'parser' => ParseHelper::regex('/\w+/')),
-	array('parser' => ParseHelper::literal('|')),
-	array('add' => true, 'tag' => 'price', 'parser' => ParseHelper::regex('/\d+/')),
-	array('parser' => ParseHelper::literal('|')),
-	array('add' => true, 'tag' => 'qty', 'parser' => ParseHelper::regex('/\d+/')),
-)), ParseHelper::literal("\n"));
-
-// echo "</p><p>deal</p><p>";
-// echo htmlspecialchars(json_encode($weed_parser($mild)));
 
 echo '</pre>';
-
 ?>

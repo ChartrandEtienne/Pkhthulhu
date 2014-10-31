@@ -34,7 +34,9 @@ $meta_either = ParseHelper::sequence_tagger(array(
 
 $meta_sequence_members = ParseHelper::either_tagger(array(
 	// anonymous pattern alone
-	array('choice' => 'anon', 'parser' => &$pattern),
+	array('choice' => 'anon', 'parser' => ParseHelper::sequence_tagger(array(
+		array('add' => true, 'tag' => 'pattern', 'parser' => &$pattern),
+	))),
 
 	array('choice' => 'pair', 'parser' => ParseHelper::sequence_tagger(array(
 		array('add' => true, 'tag' => 'identifier', 'parser' => $meta_identifier),
